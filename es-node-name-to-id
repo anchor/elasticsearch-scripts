@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Copyright (c) 2014 Anchor Systems
+
+# https://github.com/anchor/elasticsearch-scripts
+
 NODE_NAME=$1
 if [ -z "$NODE_NAME" ]; then
 	echo "USAGE $0 <NODE_FQDN>"
