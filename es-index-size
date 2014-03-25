@@ -1,0 +1,114 @@
+#!/usr/bin/env python
+
+"""
+NAME
+
+    es-index-size - how big are my ElasticSearch indices?
+
+
+SYNOPSIS
+
+    es-index-size [-h] [HOST[:PORT]]
+
+"""
+DEFAULT_HOST = "localhost"
+DEFAULT_PORT = 9200
+
+from esadmin import Connection, TabularPrinter, fmt_bytes
+from optparse import OptionParser
+import logging
+import sys
+
+logger = logging.getLogger(__name__)
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    usage = "%prog [-h] [HOST[:PORT]]"
+    parser = OptionParser(usage=usage)
+    parser.remove_option("-h")
+    parser.add_option("-h", dest="humanise", action="store_true",
+                      default=False, help="'Human-readable' output.  "
+                      "Display unit suffixes on byte counts.")
+    try:
+        opts, args = parser.parse_args(argv[1:])
+    except IndexError:
+        parser.print_help()
+        return 2
+
+    indices = {}
+    printer = TabularPrinter(margin="")
+
+    host = DEFAULT_HOST
+    port = DEFAULT_PORT
+
+    try:
+        address = args[0]
+    except IndexError:
+        pass
+    else:
+        if address.find(":") == -1:
+            host = address
+        else:
+            host, port = address.split(":")
+            try:
+                port = int(port)
+            except ValueError:
+                parser.print_help()
+                return 2
+
+    with Connection(host, port) as conn:
+        es_index_settings = conn.get('/_settings')
+        es_index_status   = conn.get('/_status')
+
+    for index, detail in es_index_status['indices'].iteritems():
+        indices[index] = {}
+
+        indices[index]['primary_size'] = (detail['index']
+                                          ['primary_size_in_bytes'])
+        indices[index]['total_size']   = (detail['index']
+                                          ['size_in_bytes'])
+
+        try:
+            indices[index]['replicas'] = (es_index_settings[index]
+                                          ['settings']
+                                          ['index.number_of_replicas'])
+        except KeyError:
+            indices[index]['replicas'] = "?"
+
+    sum_pri_sz      = 0
+    sum_pri_repl_sz = 0
+
+    printer.row("INDEX", "REPLICAS", "PRI SZ", "PRI+REPL SZ")
+
+    for index in sorted(indices.keys()):
+        sum_pri_sz      += indices[index]['primary_size']
+        sum_pri_repl_sz += indices[index]['total_size']
+
+        replicas    = indices[index]['replicas']
+
+        if opts.humanise:
+            pri_sz      = fmt_bytes(indices[index]['primary_size'])
+            pri_repl_sz = fmt_bytes(indices[index]['total_size'])
+        else:
+            pri_sz      = indices[index]['primary_size']
+            pri_repl_sz = indices[index]['total_size']
+
+        printer.row(index, replicas, pri_sz, pri_repl_sz)
+
+    if opts.humanise:
+        printer.row("Total:", "", fmt_bytes(sum_pri_sz),
+                    fmt_bytes(sum_pri_repl_sz))
+    else:
+        printer.row("Total:", "", sum_pri_sz, sum_pri_repl_sz)
+
+    printer.output()
+
+    return 0
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO,
+                        format='%(levelname)s:\t%(message)s')
+
+    sys.exit(main(sys.argv))

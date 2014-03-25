@@ -1,0 +1,71 @@
+#!/usr/bin/env python
+
+"""
+NAME
+
+    es-list-indices - print a list of indices from an ElasticSearch
+                      cluster
+
+
+SYNOPSIS
+
+    es-list-indices [HOST[:PORT]]
+
+
+DESCRIPTION
+
+    Connect to the ElasticSearch HTTP server at HOST:PORT (defaults to 
+    localhost:9200), and print one line for each index in the cluster in 
+    alphabetical order.
+
+    You may supply the HOST:PORT of any one of the servers in your 
+    ElasticSearch cluster.
+
+"""
+DEFAULT_HOST = "localhost"
+DEFAULT_PORT = 9200
+
+from esadmin import Connection
+import logging
+import os
+import sys
+
+logger = logging.getLogger(__name__)
+
+def usage(argv):
+    print >>sys.stderr, ("Usage:\n\t%s [HOST[:PORT]]\n" %
+                         os.path.basename(argv[0]))
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    host = DEFAULT_HOST
+    port = DEFAULT_PORT
+
+    try:
+        address = sys.argv[1]
+    except IndexError:
+        pass
+    else:
+        if address.find(":") == -1:
+            host = address
+        else:
+            host, port = address.split(":")
+            try:
+                port = int(port)
+            except ValueError:
+                usage(argv)
+                return 2
+
+    with Connection(host, port) as conn:
+        for index in sorted(conn.indices()):
+            print index
+
+    return 0
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO,
+                        format='%(levelname)s:\t%(message)s')
+
+    sys.exit(main(sys.argv))

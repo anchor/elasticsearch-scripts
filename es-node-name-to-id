@@ -1,0 +1,13 @@
+#!/bin/bash
+
+NODE_NAME=$1
+if [ -z "$NODE_NAME" ]; then
+	echo "USAGE $0 <NODE_FQDN>"
+	exit 1
+fi
+NODE_ID=`/usr/bin/curl -s http://localhost:9200/_nodes/ | /usr/bin/env python -mjson.tool | /bin/grep -B 3 "\"fqdn\": \"${NODE_NAME}\"" | /usr/bin/head -n1 | /usr/bin/cut -f 1 -d ':' | /bin/sed 's/ \|\"//g'`
+if [ -z "$NODE_ID" ]; then
+	echo "Unknown node: $NODE_NAME"
+	exit 1
+fi
+echo $NODE_ID

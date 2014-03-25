@@ -1,0 +1,99 @@
+#!/usr/bin/env python
+
+"""
+NAME
+
+    es-write-enable - disable an ElasticSearch cluster's automatic
+                           shard allocator
+
+
+SYNOPSIS
+
+    es-write-enable [HOST[:PORT]]
+
+DESCRIPTION
+
+    Connect to the ElasticSearch HTTP server at HOST:PORT (defaults to 
+    localhost:9200), and submit an API request to put the node into 
+    read-write mode. 
+
+RETURN VALUES
+
+    es-write-enable will return zero on success; non-zero on 
+    failure.  Success is defined by the underlying ElasticSearch API.  
+    See BACKGROUND INFORMATION.
+
+
+BACKGROUND INFORMATION
+
+    - http://www.elasticsearch.org/guide/reference/api/admin-indices-update-settings.html
+
+
+SEE ALSO
+
+    es-write-disable
+
+"""
+
+DEFAULT_HOST = "localhost"
+DEFAULT_PORT = 9200
+
+from esadmin import Connection
+import logging
+import os
+import socket
+import sys
+
+logger = logging.getLogger(__name__)
+
+def usage(argv):
+    print >>sys.stderr, ("Usage:\n\t%s [HOST[:PORT]]\n" %
+                         os.path.basename(argv[0]))
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    host = DEFAULT_HOST
+    port = DEFAULT_PORT
+
+    try:
+        address = sys.argv[1]
+    except IndexError:
+        pass
+    else:
+        if address.find(":") == -1:
+            host = address
+        else:
+            host, port = address.split(":")
+            try:
+                port = int(port)
+            except ValueError:
+                usage(argv)
+                return 2
+
+    logger.info("Enabling writes...")
+
+    with Connection(host, port) as conn:
+        conn.put('/_settings', 
+                 '{ "index" : {'
+                 '"blocks.read_only": "false" }}')
+
+        status = conn.get("/_settings")
+        disabled = filter(lambda index_key: status[index_key]["settings"]["index.blocks.read_only"] == "true", status.keys())
+        if disabled:
+            print("WARNING: write still disabled on %d indices:" % len(disabled))
+            print("\n\t".join(disabled))
+            logger.warning("Failed to enable write on indices %s" % ', '.join(disabled))
+            sys.exit(1)
+
+    logger.info("Done")
+    return 0
+
+if __name__ == '__main__':
+    hostname = socket.gethostname()
+    fmt = ('[%s] [%%(process)d]: [%%(levelname)s] '
+           '%%(message)s' % hostname)
+    logging.basicConfig(level=logging.INFO, format=fmt)
+
+    sys.exit(main(sys.argv))

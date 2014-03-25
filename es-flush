@@ -1,0 +1,118 @@
+#!/usr/bin/env python
+
+"""
+NAME
+
+    es-flush - flush all indices in an ElasticSearch cluster to disk
+
+
+SYNOPSIS
+
+    es-flush [HOST[:PORT]]
+
+
+DESCRIPTION
+
+    Connect to the ElasticSearch HTTP server at HOST:PORT (defaults to 
+    localhost:9200), and submit a synchronous API request to flush all 
+    indices across the cluster to disk.  Indices will be on disk by the 
+    time this command returns.
+
+    You may supply the HOST:PORT of any one of the servers in your 
+    ElasticSearch cluster.  The server that receives our request will 
+    forward it on to its peers.
+
+"""
+DEFAULT_HOST = "localhost"
+DEFAULT_PORT = 9200
+
+from esadmin import Connection
+import logging
+import os
+import socket
+import sys
+import json
+import re
+
+logger = logging.getLogger(__name__)
+
+def usage(argv):
+    print >>sys.stderr, ("Usage:\n\t%s [HOST[:PORT]]\n" %
+                         os.path.basename(argv[0]))
+
+def filter_duplicate_flushes(failures):
+    base_rxp = "^.*FlushNotAllowedEngineException\[\[<<index>>\]\[<<shard>>]\s+Already\s+flushing\.\.\.\];.*$"
+    actual_failures = []
+
+    for failed_shard in failures:
+        shard = failed_shard["shard"]
+        index = failed_shard["index"]
+        exception = failed_shard["reason"]
+
+        shard_rxp = base_rxp.replace("<<index>>", index).replace("<<shard>>", str(shard))
+        duplicate_rxp = re.compile(shard_rxp, re.I)
+        if not duplicate_rxp.match(exception):
+            actual_failures.append((shard, index, exception))
+        else:
+            logger.info("Skipping shard %d of index %s: already flushing." % (shard, index))
+    return actual_failures
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    host = DEFAULT_HOST
+    port = DEFAULT_PORT
+
+    try:
+        address = sys.argv[1]
+    except IndexError:
+        pass
+    else:
+        if address.find(":") == -1:
+            host = address
+        else:
+            host, port = address.split(":")
+            try:
+                port = int(port)
+            except ValueError:
+                usage(argv)
+                return 2
+
+    logger.info("Flushing all indices to disk...")
+    
+    exit_code = 0
+
+    with Connection(host, port) as conn:
+        resp = conn.post('/_flush')
+
+        assert 'ok' in resp
+        assert resp['ok'] == True
+        assert '_shards' in resp
+        assert 'total' in resp['_shards']
+        assert 'successful' in resp['_shards']
+        # The API will report failures for shards which are already syncing;
+        # don't need to worry about these. 
+        failed = []
+
+        if resp['_shards']['failed'] > 0:
+            failed = filter_duplicate_flushes(resp['_shards']['failures'])
+        if failed:
+            print(failed)
+            for failure in failed:
+                logger.error("Failed to flush shard %d of index %s: %s" % (failure[0], failure[1], failure[2]))
+            exit_code = 1
+
+    logger.info("Done")
+    if exit_code:
+        logger.warning("Failed to flush all shards.")
+
+    return exit_code
+
+if __name__ == '__main__':
+    hostname = socket.gethostname()
+    fmt = ('[%s] [%%(process)d]: [%%(levelname)s] '
+           '%%(message)s' % hostname)
+    logging.basicConfig(level=logging.INFO, format=fmt)
+
+    sys.exit(main(sys.argv))

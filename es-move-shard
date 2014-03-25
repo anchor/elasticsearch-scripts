@@ -1,0 +1,32 @@
+#!/bin/bash
+
+INDEX=$1
+SHARD=$2
+FROM_NODE_NAME=$3
+TO_NODE_NAME=$4
+
+if [ -z "$INDEX" -o -z "$SHARD" -o -z "$FROM_NODE_NAME" -o -z "$TO_NODE_NAME" ]; then
+	echo "USAGE: $0 <INDEX> <SHARD> <FROM_FQDN> <TO_FQDN>"
+	exit 1
+fi
+
+if ! [[ "$SHARD" =~ ^[0-9]+$ ]]; then
+	echo "SHARD must be an integer"
+	exit 1
+fi
+
+# lookup node name
+FROM_NODE_ID=`es-node-name-to-id "$FROM_NODE_NAME"`
+TO_NODE_ID=`es-node-name-to-id "$TO_NODE_NAME"`
+
+if [ -z "$FROM_NODE_ID" ]; then
+	echo "Unknown from node: ${FROM_NODE_NAME}"
+	exit 1
+fi
+
+if [ -z "$TO_NODE_ID" ]; then
+	echo "Unknown to node: ${TO_NODE_NAME}"
+	exit 1
+fi
+
+/usr/bin/curl http://localhost:9200/_cluster/reroute -d "{ \"commands\": [ { \"move\": { \"index\": \"${INDEX}\", \"shard\": ${SHARD}, \"from_node\": \"${FROM_NODE_ID}\", \"to_node\": \"${TO_NODE_ID}\" } } ] }"
