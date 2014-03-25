@@ -6,4 +6,4 @@ Set of scripts for administering Elasticsearch clusters.
 Requirements
 ============
 
-[esadmin](https://github.com/anchor/esadmin)
+[elasticsearchadmin](https://github.com/anchor/elasticsearchadmin)
