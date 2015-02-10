@@ -6,7 +6,7 @@ from pip.req import parse_requirements
 setup(
     name="elasticsearch-scripts",
     description="Set of scripts for administering Elasticsearch clusters.",
-    version="1.0.0",
+    version="1.0.1",
     packages=find_packages(),
     url="https://github.com/anchor/elasticsearch-scripts",
     maintainer="Sharif Olorin",
