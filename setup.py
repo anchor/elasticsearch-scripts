@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 
 from setuptools import setup, find_packages
-from pip.req import parse_requirements
+
+reqs = list(filter(lambda s: s,
+        map(lambda s: s.strip(),
+        open("requirements.txt").readlines())))
 
 setup(
     name="elasticsearch-scripts",
     description="Set of scripts for administering Elasticsearch clusters.",
-    version="1.0.1",
+    version="1.0.2",
     packages=find_packages(),
     url="https://github.com/anchor/elasticsearch-scripts",
     maintainer="Sharif Olorin",
@@ -41,7 +44,6 @@ setup(
         "es-write-enable",
     ],
     license="MIT",
-    install_requires=[str(req.req) for req in
-                          parse_requirements("requirements.txt")],
-    include_package_data=True
+    install_requires=reqs,
+    include_package_data=True,
 )
